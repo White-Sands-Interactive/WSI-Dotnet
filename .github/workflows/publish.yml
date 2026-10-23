@@ -21,5 +21,5 @@ jobs:
         id: login
         uses: NuGet/login@v1
         with:
-          user: White_Sands_Interactive
+          user: wsinteractive1
       - run: dotnet nuget push artifacts/*.nupkg --source https://api.nuget.org/v3/index.json --api-key ${{ steps.login.outputs.NUGET_API_KEY }} --skip-duplicate
