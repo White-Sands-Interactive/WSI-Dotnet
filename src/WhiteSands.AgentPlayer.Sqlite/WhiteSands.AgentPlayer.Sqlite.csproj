@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>netstandard2.1;net8.0</TargetFrameworks>
+    <RootNamespace>WhiteSands.AgentPlayer</RootNamespace>
+    <Description>SQLite action log for WhiteSands.AgentPlayer. Later views include what each character already called.</Description>
+    <PackageId>WhiteSands.AgentPlayer.Sqlite</PackageId>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>whitesands;agent;sqlite</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\WhiteSands.AgentPlayer\WhiteSands.AgentPlayer.csproj" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.10" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+    <None Include="..\..\LICENSE" Pack="true" PackagePath="\" />
+  </ItemGroup>
+</Project>

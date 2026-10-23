@@ -1,0 +1,16 @@
+<Project>
+  <PropertyGroup>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <Deterministic>true</Deterministic>
+    <RollForward>Major</RollForward>
+    <Company>White Sands Interactive</Company>
+    <Authors>White Sands Interactive</Authors>
+    <Copyright>Copyright (c) 2026 White Sands Interactive</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/White-Sands-Interactive/WSI-Dotnet</RepositoryUrl>
+    <Version>1.0.0</Version>
+  </PropertyGroup>
+</Project>

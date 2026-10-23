@@ -1,0 +1,20 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - run: dotnet build WhiteSands.AgentPlayer.sln -c Release
+      - run: dotnet test WhiteSands.AgentPlayer.sln -c Release --no-build
+      - run: dotnet pack WhiteSands.AgentPlayer.sln -c Release -o artifacts
+      - run: dotnet run --project examples/Courier/Courier.csproj -c Release --no-build
+      - run: dotnet run --project examples/Ferry/Ferry.csproj -c Release --no-build
+      - run: dotnet run --project examples/Forest/Forest.csproj -c Release --no-build

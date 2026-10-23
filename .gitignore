@@ -1,0 +1,10 @@
+bin/
+obj/
+.vs/
+.idea/
+artifacts/
+.wsi/
+*.user
+*.nupkg
+.DS_Store
+TestResults/
