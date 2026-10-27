@@ -132,11 +132,8 @@ public sealed class AgentServerOptions
     /// </summary>
     public string? PlatformKey { get; set; }
 
-    /// <summary>
-    /// WebSocket URL of the platform.
-    /// Defaults to <c>WSI_PLATFORM_URL</c>, then <c>ws://127.0.0.1:8787</c>.
-    /// </summary>
-    public string? PlatformUrl { get; set; }
+    /// <summary>Test hook. Game code always uses <see cref="AgentServer.PlatformUrl"/>.</summary>
+    internal string? PlatformUrl { get; set; }
 
     /// <summary>Skip the outbound WebSocket and run against this in-process platform.</summary>
     public IInlinePlatform? Inline { get; set; }

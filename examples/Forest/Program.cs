@@ -14,7 +14,6 @@ var agents = useRemote
     ? new AgentServer(new AgentServerOptions
     {
         PlatformKey = Required("PLATFORM_KEY"),
-        PlatformUrl = Environment.GetEnvironmentVariable("PLATFORM_URL"),
     })
     : new AgentServer(new AgentServerOptions
     {

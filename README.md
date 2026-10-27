@@ -31,10 +31,9 @@ Set the platform key, then start one agent per character. `TurnAsync` grants tha
 
 ```sh
 export WSI_PLATFORM_KEY=pk_...
-export WSI_PLATFORM_URL=ws://127.0.0.1:8787
 ```
 
-`WSI_PLATFORM_URL` defaults to `ws://127.0.0.1:8787` when it is unset.
+The SDK connects to `wss://api.whitesandsint.com`. That address is part of the library.
 
 ```csharp
 await using var agents = new AgentServer();
@@ -48,7 +47,7 @@ var result = await ada.TurnAsync();
 // result.Action, result.Args, result.Result, result.Attempts, result.Usage
 ```
 
-`new AgentServer(new AgentServerOptions { PlatformKey = "...", PlatformUrl = "..." })` overrides the environment variables.
+`new AgentServer(new AgentServerOptions { PlatformKey = "..." })` overrides `WSI_PLATFORM_KEY`.
 
 ### The player class
 
@@ -284,12 +283,10 @@ dotnet run --project examples/Ferry
 dotnet run --project examples/Forest
 ```
 
-Each example replays a script. Add `-- --remote` to use a platform that is already serving:
+Each example replays a script. Add `-- --remote` to talk to `wss://api.whitesandsint.com`:
 
 ```sh
-./platform create-key demo
-MODEL_API_KEY=... MODEL_BASE_URL=... MODEL_NAME=... ./platform serve
 PLATFORM_KEY=pk_... dotnet run --project examples/Forest -- --remote
 ```
 
-`./platform` is the Go server from the Platform repository. Releases are recorded in [CHANGELOG.md](CHANGELOG.md).
+Releases are recorded in [CHANGELOG.md](CHANGELOG.md).

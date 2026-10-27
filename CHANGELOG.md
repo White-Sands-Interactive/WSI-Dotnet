@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- The SDK always connects to `wss://api.whitesandsint.com`. `WSI_PLATFORM_URL` and `PLATFORM_URL` are no longer read.
+
 ## 1.0.0
 
 First release of the C# agent player SDK. It speaks the same protocol as `@whitesands/agent-player` 1.0.0.

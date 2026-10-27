@@ -15,7 +15,7 @@ namespace WhiteSands.AgentPlayer;
 /// </summary>
 public sealed class AgentServer : IAsyncDisposable
 {
-    public const string DefaultPlatformUrl = "ws://127.0.0.1:8787";
+    public const string PlatformUrl = "wss://api.whitesandsint.com";
     private static readonly TimeSpan DefaultTurnTimeout = TimeSpan.FromSeconds(60);
 
     private readonly AgentServerOptions _options;
@@ -44,9 +44,7 @@ public sealed class AgentServer : IAsyncDisposable
 
         _options = options;
         _platformKey = string.IsNullOrEmpty(platformKey) ? "inline" : platformKey!;
-        _platformUrl = options.PlatformUrl
-            ?? Environment.GetEnvironmentVariable("WSI_PLATFORM_URL")
-            ?? DefaultPlatformUrl;
+        _platformUrl = options.PlatformUrl ?? PlatformUrl;
         _logger = options.Logger ?? NullLogger.Instance;
         _inline = options.Inline;
         if (options.OnEvent != null)
