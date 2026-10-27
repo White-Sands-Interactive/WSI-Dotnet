@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.1.0
 
 - The SDK always connects to `wss://api.whitesandsint.com`. `WSI_PLATFORM_URL` and `PLATFORM_URL` are no longer read.
 

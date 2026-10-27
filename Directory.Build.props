@@ -11,6 +11,6 @@
     <Copyright>Copyright (c) 2026 White Sands Interactive</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <RepositoryUrl>https://github.com/White-Sands-Interactive/WSI-Dotnet</RepositoryUrl>
-    <Version>1.0.0</Version>
+    <Version>1.1.0</Version>
   </PropertyGroup>
 </Project>

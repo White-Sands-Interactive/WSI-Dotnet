@@ -8,7 +8,7 @@ public static class ProtocolConstants
 {
     public const int ProtocolVersion = 1;
 
-    public const string SdkVersion = "1.0.0";
+    public const string SdkVersion = "1.1.0";
 
     /// <summary>How long a disconnected session can be resumed. Shared by both sides.</summary>
     public static readonly TimeSpan SessionResumeGrace = TimeSpan.FromSeconds(30);
