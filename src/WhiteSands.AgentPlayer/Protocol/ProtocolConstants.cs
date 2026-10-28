@@ -2,13 +2,12 @@ namespace WhiteSands.AgentPlayer.Protocol;
 
 /// <summary>
 /// Wire protocol between <see cref="AgentServer"/> and the platform. Version 1.
-/// The platform's Go copy lives in White-Sands-Interactive/Platform, internal/protocol.
 /// </summary>
 public static class ProtocolConstants
 {
     public const int ProtocolVersion = 1;
 
-    public const string SdkVersion = "1.1.0";
+    public const string SdkVersion = "1.1.1";
 
     /// <summary>How long a disconnected session can be resumed. Shared by both sides.</summary>
     public static readonly TimeSpan SessionResumeGrace = TimeSpan.FromSeconds(30);

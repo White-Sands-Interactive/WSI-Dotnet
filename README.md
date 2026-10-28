@@ -1,6 +1,6 @@
 # WSI Agent Player for C#
 
-The library starts a remote game agent from a player class. The game calls `StartAsync` and `TurnAsync`. The SDK publishes that class as tools. The model runs on the [platform](https://github.com/White-Sands-Interactive/Platform), so the game process never holds the model key.
+The library starts a remote game agent from a player class. The game calls `StartAsync` and `TurnAsync`. The SDK publishes that class as tools. The model runs on the platform, so the game process never holds the model key.
 
 This is the C# port of [`@whitesands/agent-player`](https://github.com/White-Sands-Interactive/WSI-Node). Both speak protocol version 1.
 
@@ -264,7 +264,7 @@ var agents = new AgentServer(new AgentServerOptions
 
 ### Protocol
 
-`WhiteSands.AgentPlayer.Protocol` holds the wire types and `ProtocolConstants.ProtocolVersion`. The platform's copy is `internal/protocol` in [White-Sands-Interactive/Platform](https://github.com/White-Sands-Interactive/Platform). A change to the wire format has to land in both places. Game code uses `AgentServer` and does not need the protocol types.
+`WhiteSands.AgentPlayer.Protocol` holds the wire types and `ProtocolConstants.ProtocolVersion`. Game code uses `AgentServer` and does not need the protocol types.
 
 ## This repository
 
