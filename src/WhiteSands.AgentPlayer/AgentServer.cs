@@ -93,6 +93,16 @@ public sealed class AgentServer : IAsyncDisposable
     }
 
     /// <summary>
+    /// Close the platform socket from any thread. Sessions stay registered.
+    /// <see cref="StartAsync"/> waiting on the handshake or <c>session_started</c> returns
+    /// because the connection closed. <c>TurnAsync</c> waiting for a turn result stays waiting.
+    /// <see cref="CloseAsync"/> still stops sessions. An inline server has no socket, so this does nothing.
+    /// </summary>
+    public void Interrupt() => _connection?.Interrupt();
+
+    internal int SessionCount => _sessions.Count;
+
+    /// <summary>
     /// Reflect the player into tools, register a session, and return a handle.
     /// <c>TurnAsync</c> on that handle lets the remote model act once.
     /// </summary>
@@ -150,15 +160,23 @@ public sealed class AgentServer : IAsyncDisposable
             record.Mux = mux;
             _sessions[sessionId] = record;
             var started = _connection.WaitForSessionEventAsync(sessionId, "start");
-            _connection.Send(new StartSessionEnvelope
+            try
             {
-                SessionId = sessionId,
-                SessionToken = sessionToken,
-                Name = name,
-                Tools = reflected.Tools.ToList(),
-                Instructions = instructions,
-                Goal = options?.Goal,
-            });
+                _connection.Send(new StartSessionEnvelope
+                {
+                    SessionId = sessionId,
+                    SessionToken = sessionToken,
+                    Name = name,
+                    Tools = reflected.Tools.ToList(),
+                    Instructions = instructions,
+                    Goal = options?.Goal,
+                });
+            }
+            catch (Exception) when (started.IsFaulted)
+            {
+                await started.ConfigureAwait(false);
+            }
+
             await started.ConfigureAwait(false);
         }
 
@@ -374,7 +392,7 @@ public sealed class AgentServer : IAsyncDisposable
         {
             await _inline.StopSessionAsync(sessionId).ConfigureAwait(false);
         }
-        else if (_connection != null)
+        else if (_connection != null && _connection.Connected)
         {
             var stopped = _connection.WaitForSessionEventAsync(sessionId, "stop");
             try

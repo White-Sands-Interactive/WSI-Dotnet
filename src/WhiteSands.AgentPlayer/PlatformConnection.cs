@@ -62,6 +62,8 @@ internal sealed class PlatformConnection : IAsyncDisposable
     private bool _everConnected;
     private bool _reconnecting;
     private int _reconnectAttempt;
+    private int _interrupted;
+    private SocketSession? _socketSession;
 
     public PlatformConnection(string url, string platformKey, PlatformConnectionHandlers handlers, ILogger logger)
     {
@@ -157,6 +159,37 @@ internal sealed class PlatformConnection : IAsyncDisposable
 
     public SessionMuxTransport CreateTransport(string sessionId) => new(sessionId, Send);
 
+    /// <summary>
+    /// Abort the current socket from any thread. Does not reconnect, and does not fail turn waiters.
+    /// A handshake or <c>session_started</c> waiter returns because the connection closed.
+    /// </summary>
+    public void Interrupt()
+    {
+        Interlocked.Exchange(ref _interrupted, 1);
+        StopHeartbeat();
+        FailStartWaiters();
+        var session = _socketSession;
+        if (session != null && !session.Hello.Task.IsCompleted)
+        {
+            session.Hello.TrySetException(new InvalidOperationException("platform connection closed before hello"));
+        }
+
+        var ws = _ws;
+        if (ws == null)
+        {
+            return;
+        }
+
+        try
+        {
+            ws.Abort();
+        }
+        catch (Exception)
+        {
+            // already closed
+        }
+    }
+
     public async Task CloseAsync()
     {
         _closed = true;
@@ -194,15 +227,21 @@ internal sealed class PlatformConnection : IAsyncDisposable
             throw new InvalidOperationException("Platform connection is closed");
         }
 
+        if (Volatile.Read(ref _interrupted) == 1)
+        {
+            throw new InvalidOperationException("platform connection closed");
+        }
+
         var ws = new ClientWebSocket();
         ws.Options.KeepAliveInterval = Timeout.InfiniteTimeSpan;
         var session = new SocketSession(ws);
+        _socketSession = session;
         _ws = ws;
         try
         {
             await ws.ConnectAsync(new Uri(_url), _lifetime.Token).ConfigureAwait(false);
         }
-        catch
+        catch (Exception)
         {
             if (_ws == ws)
             {
@@ -210,7 +249,26 @@ internal sealed class PlatformConnection : IAsyncDisposable
             }
 
             ws.Dispose();
+            if (Volatile.Read(ref _interrupted) == 1)
+            {
+                await ThrowHandshakeClosedAsync(session).ConfigureAwait(false);
+            }
+
             throw;
+        }
+
+        if (Volatile.Read(ref _interrupted) == 1)
+        {
+            try
+            {
+                ws.Abort();
+            }
+            catch (Exception)
+            {
+                // already closed
+            }
+
+            await ThrowHandshakeClosedAsync(session).ConfigureAwait(false);
         }
 
         _ = PumpAsync(session);
@@ -262,7 +320,7 @@ internal sealed class PlatformConnection : IAsyncDisposable
         }
         catch (Exception ex)
         {
-            if (!_closed && ex is not OperationCanceledException)
+            if (!_closed && Volatile.Read(ref _interrupted) == 0 && ex is not OperationCanceledException)
             {
                 _handlers.OnError?.Invoke(ex);
             }
@@ -382,6 +440,17 @@ internal sealed class PlatformConnection : IAsyncDisposable
             _ws = null;
         }
 
+        if (Volatile.Read(ref _interrupted) == 1)
+        {
+            if (!session.Hello.Task.IsCompleted)
+            {
+                session.Hello.TrySetException(new InvalidOperationException("platform connection closed before hello"));
+            }
+
+            FailStartWaiters();
+            return;
+        }
+
         if (!session.Hello.Task.IsCompleted)
         {
             session.Hello.TrySetException(new InvalidOperationException("platform connection closed before hello"));
@@ -401,7 +470,7 @@ internal sealed class PlatformConnection : IAsyncDisposable
     {
         lock (_state)
         {
-            if (_closed || _reconnecting)
+            if (_closed || _reconnecting || Volatile.Read(ref _interrupted) == 1)
             {
                 return;
             }
@@ -436,11 +505,23 @@ internal sealed class PlatformConnection : IAsyncDisposable
             return;
         }
 
+        if (_closed || Volatile.Read(ref _interrupted) == 1)
+        {
+            _reconnecting = false;
+            return;
+        }
+
         await ReconnectAsync().ConfigureAwait(false);
     }
 
     private async Task ReconnectAsync()
     {
+        if (_closed || Volatile.Read(ref _interrupted) == 1)
+        {
+            _reconnecting = false;
+            return;
+        }
+
         try
         {
             await OpenSocketAsync().ConfigureAwait(false);
@@ -564,6 +645,40 @@ internal sealed class PlatformConnection : IAsyncDisposable
         finally
         {
             _sendLock.Release();
+        }
+    }
+
+    private async Task ThrowHandshakeClosedAsync(SocketSession session)
+    {
+        if (!session.Hello.Task.IsCompleted)
+        {
+            session.Hello.TrySetException(new InvalidOperationException("platform connection closed before hello"));
+        }
+
+        await session.Hello.Task.ConfigureAwait(false);
+    }
+
+    private void FailStartWaiters()
+    {
+        List<Waiter> waiters = new();
+        lock (_pending)
+        {
+            foreach (var pair in _pending.ToList())
+            {
+                if (!pair.Key.EndsWith(":start", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                waiters.Add(pair.Value);
+                _pending.Remove(pair.Key);
+            }
+        }
+
+        foreach (var waiter in waiters)
+        {
+            waiter.Timeout.Dispose();
+            waiter.Source.TrySetException(new InvalidOperationException("platform connection closed"));
         }
     }
 

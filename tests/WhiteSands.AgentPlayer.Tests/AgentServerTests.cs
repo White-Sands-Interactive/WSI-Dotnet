@@ -148,6 +148,51 @@ public class AgentServerTests
     }
 
     [Fact]
+    public async Task RetriesADynamicToolAfterASchemaFailure()
+    {
+        var calls = 0;
+        JsonElement seen = default;
+        var world = new TinyWorld();
+        world.BindDynamic(
+            "leap",
+            "",
+            ProtocolJson.Parse("""{"type":"object","properties":{"dx":{"type":"integer"}},"required":["dx"]}"""),
+            args =>
+            {
+                calls++;
+                seen = args.Clone();
+                return new { dx = args.GetProperty("dx").GetInt32() };
+            });
+        var agents = new AgentServer(new AgentServerOptions
+        {
+            Inline = TestPlatform.Create(new[]
+            {
+                ToolCallRequest.Call("leap", new { dx = "nope", extra = true }),
+                ToolCallRequest.Call("leap", new { dx = 4, extra = true }),
+            }),
+        });
+        var agent = await agents.StartAsync(world);
+        var result = await agent.TurnAsync();
+        Assert.Equal(2, result.Attempts);
+        Assert.Equal("leap", result.Action);
+        Assert.Equal(1, calls);
+        Assert.Equal(4, seen.GetProperty("dx").GetInt32());
+        Assert.False(seen.TryGetProperty("extra", out _));
+        await agents.CloseAsync();
+    }
+
+    [Fact]
+    public async Task InterruptOnAnInlineServerLeavesTheSessionInPlace()
+    {
+        var agents = new AgentServer(new AgentServerOptions { Inline = new IdlePlatform() });
+        await agents.StartAsync(new TinyWorld());
+        agents.Interrupt();
+        Assert.Equal(1, agents.SessionCount);
+        await agents.CloseAsync();
+        Assert.Equal(0, agents.SessionCount);
+    }
+
+    [Fact]
     public void ReadsThePlatformKeyFromTheEnvironment()
     {
         var previous = Environment.GetEnvironmentVariable("WSI_PLATFORM_KEY");

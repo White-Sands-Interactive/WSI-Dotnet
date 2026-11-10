@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.0
+
+- `BindDynamic` registers one tool from a name, description, argument schema, and callback. `see` may replace the reflected view. `wait`, an empty name, a name starting with `_`, and a missing callback are rejected.
+- `Interrupt` closes the platform socket from any thread. Sessions stay registered, and a turn waiting for a result stays waiting. `CloseAsync` still stops sessions.
+
 ## 1.1.1
 
 - The SDK always connects to `wss://api.whitesandsint.com`. `WSI_PLATFORM_URL` and `PLATFORM_URL` are no longer read.
