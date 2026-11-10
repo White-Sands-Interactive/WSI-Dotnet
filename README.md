@@ -99,6 +99,22 @@ public sealed class Villager
 
 A method with no `[AgentAction]` is still a tool. `object` and `JsonElement` parameters accept any JSON value. `int` and `long` are integers. `double` is a number. A value that does not match the parameter type counts as a failed action and uses the one retry.
 
+### Dynamic tools
+
+`BindDynamic` registers one tool from data instead of a method. Call it on the player before `StartAsync`. `see` replaces the reflected view. `wait`, an empty name, a name starting with `_`, a missing callback, and a schema that is not a JSON object are rejected. An empty description becomes `Action: {name}`. Registering the same name again replaces that tool.
+
+Arguments are checked before the callback runs. A missing required value or a value of the wrong type throws, and that failure uses the one retry. Keys that are not in `properties` are dropped. A callback may return `Task` or `ValueTask`; those are awaited. The callback runs on the same context as a reflected method.
+
+```csharp
+var schema = JsonSerializer.SerializeToElement(new
+{
+    type = "object",
+    properties = new { dx = new { type = "integer" } },
+    required = new[] { "dx" },
+});
+villager.BindDynamic("leap", "Jump by dx", schema, args => new { dx = args.GetProperty("dx").GetInt32() });
+```
+
 ### Declaring arguments
 
 `[AgentPlayer]` and `[AgentAction]` add the description the model sees. The schema comes from the parameters, so a string passed to `int dx` fails before your method runs.
@@ -144,6 +160,8 @@ var result = await ada.TurnAsync(
 | `Usage` | `PromptTokens` and `CompletionTokens` for that turn |
 
 The default timeout is 60 seconds. Pass a `CancellationToken` to abort the wait. `handle.StopAsync()` ends that session. `agents.CloseAsync()`, also run by `await using`, stops every session on the server. The platform process keeps running.
+
+`agents.Interrupt()` closes the platform socket from any thread. Sessions stay registered. `StartAsync` waiting on the handshake or on `session_started` returns because the connection closed. `TurnAsync` waiting for a turn result stays waiting. `CloseAsync` is still what stops sessions. An inline server has no socket, so `Interrupt` does nothing there.
 
 ### Errors
 

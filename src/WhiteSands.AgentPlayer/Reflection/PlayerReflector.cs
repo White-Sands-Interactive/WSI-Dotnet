@@ -41,6 +41,8 @@ public static class PlayerReflector
             actions.Add(BuildTool(player, pair.Value, pair.Key, actionDescription, invoker));
         }
 
+        see = ApplyDynamic(player, invoker, see, actions);
+
         var waitSchema = ProtocolJson.Parse("""{"type":"object","properties":{}}""");
         var wait = new ToolDescriptor("wait", ProtocolConstants.WaitDescription, waitSchema);
         var tools = new List<ToolDescriptor> { see.Descriptor };
@@ -154,6 +156,69 @@ public static class PlayerReflector
         }
 
         return new PlayerTool(name, description, names, descriptor, Invoke);
+    }
+
+    private static PlayerTool ApplyDynamic(
+        object player,
+        PlayerInvoker? invoker,
+        PlayerTool see,
+        List<PlayerTool> actions)
+    {
+        foreach (var binding in DynamicToolRegistry.List(player))
+        {
+            var tool = BuildDynamicTool(binding, invoker);
+            if (tool.Name == "see")
+            {
+                see = tool;
+                continue;
+            }
+
+            var index = actions.FindIndex(action => action.Name == tool.Name);
+            if (index >= 0)
+            {
+                actions[index] = tool;
+            }
+            else
+            {
+                actions.Add(tool);
+            }
+        }
+
+        actions.Sort((left, right) => string.Compare(left.Name, right.Name, StringComparison.Ordinal));
+        return see;
+    }
+
+    private static PlayerTool BuildDynamicTool(DynamicToolBinding binding, PlayerInvoker? invoker)
+    {
+        var descriptor = new ToolDescriptor(binding.Name, binding.Description, binding.Schema);
+
+        async Task<object?> Invoke(JsonElement args)
+        {
+            async Task<object?> Call()
+            {
+                var bound = ArgumentSchema.Bind(binding.Schema, args);
+                return await Unwrap(binding.Callback(bound)).ConfigureAwait(false);
+            }
+
+            if (invoker == null)
+            {
+                return await Call().ConfigureAwait(false);
+            }
+
+            return await invoker(Call).ConfigureAwait(false);
+        }
+
+        return new PlayerTool(binding.Name, binding.Description, PropertyNames(binding.Schema), descriptor, Invoke);
+    }
+
+    private static string[] PropertyNames(JsonElement schema)
+    {
+        if (!schema.TryGetProperty("properties", out var properties) || properties.ValueKind != JsonValueKind.Object)
+        {
+            return Array.Empty<string>();
+        }
+
+        return properties.EnumerateObject().Select(property => property.Name).ToArray();
     }
 
     private static object?[] Bind(MethodInfo method, JsonElement args)

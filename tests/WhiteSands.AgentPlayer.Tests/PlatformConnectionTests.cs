@@ -120,6 +120,124 @@ public class PlatformConnectionTests
         }
     }
 
+    [Fact]
+    public async Task InterruptUnblocksAStartWaitingOnTheHandshake()
+    {
+        _platform = await FakePlatform.StartAsync(hold: "hello");
+        var agents = new AgentServer(new AgentServerOptions
+        {
+            PlatformKey = "pk_test",
+            PlatformUrl = _platform.Url,
+        });
+        try
+        {
+            var start = agents.StartAsync(new Pawn());
+            await WaitFor(() => HasType("hello"));
+            await Task.Run(() => agents.Interrupt());
+            var error = await Assert.ThrowsAsync<InvalidOperationException>(() => start);
+            Assert.Equal("platform connection closed before hello", error.Message);
+            await Task.Delay(500);
+            Assert.Equal(1, _platform.SocketCount);
+            Assert.Equal(0, agents.SessionCount);
+            Assert.False(HasType("stop_session"));
+        }
+        finally
+        {
+            await agents.CloseAsync();
+            await _platform.DisposeAsync();
+            _platform = null;
+        }
+    }
+
+    [Fact]
+    public async Task InterruptUnblocksAStartWaitingOnSessionStartedAndKeepsTheSession()
+    {
+        _platform = await FakePlatform.StartAsync(hold: "start_session");
+        var events = new List<string>();
+        var agents = new AgentServer(new AgentServerOptions
+        {
+            PlatformKey = "pk_test",
+            PlatformUrl = _platform.Url,
+            OnEvent = evt => events.Add(evt.Type),
+        });
+        try
+        {
+            var start = agents.StartAsync(new Pawn());
+            await WaitFor(() => HasType("start_session"));
+            await Task.Run(() => agents.Interrupt());
+            var error = await Assert.ThrowsAsync<InvalidOperationException>(() => start);
+            Assert.Equal("platform connection closed", error.Message);
+            Assert.Equal(1, agents.SessionCount);
+            await Task.Delay(500);
+            Assert.Equal(1, _platform.SocketCount);
+            Assert.DoesNotContain("disconnected", events);
+            Assert.False(HasType("stop_session"));
+            await agents.CloseAsync();
+            Assert.Equal(0, agents.SessionCount);
+            Assert.False(HasType("stop_session"));
+        }
+        finally
+        {
+            await agents.CloseAsync();
+            if (_platform != null)
+            {
+                await _platform.DisposeAsync();
+                _platform = null;
+            }
+        }
+    }
+
+    [Fact]
+    public async Task InterruptLeavesAWaitingTurnUnfinished()
+    {
+        _platform = await FakePlatform.StartAsync();
+        var events = new List<string>();
+        var agents = new AgentServer(new AgentServerOptions
+        {
+            PlatformKey = "pk_test",
+            PlatformUrl = _platform.Url,
+            OnEvent = evt => events.Add(evt.Type),
+        });
+        try
+        {
+            var agent = await agents.StartAsync(new Pawn());
+            var turn = agent.TurnAsync(new TurnOptions { Timeout = TimeSpan.FromSeconds(30) });
+            await Task.Run(() => agents.Interrupt());
+            await Task.Delay(300);
+            Assert.False(turn.IsCompleted);
+            Assert.Equal(1, agents.SessionCount);
+            Assert.DoesNotContain("disconnected", events);
+            Assert.False(HasType("stop_session"));
+            await agents.CloseAsync();
+            var error = await Assert.ThrowsAsync<TurnFailedException>(() => turn);
+            Assert.Equal("session stopped", error.Message);
+            Assert.Equal(0, agents.SessionCount);
+        }
+        finally
+        {
+            await agents.CloseAsync();
+            if (_platform != null)
+            {
+                await _platform.DisposeAsync();
+                _platform = null;
+            }
+        }
+    }
+
+    private bool HasType(string type)
+    {
+        var platform = _platform;
+        if (platform == null)
+        {
+            return false;
+        }
+
+        lock (platform.Received)
+        {
+            return platform.Received.Any(envelope => envelope.GetProperty("type").GetString() == type);
+        }
+    }
+
     private static async Task WaitFor(Func<bool> ready)
     {
         var start = DateTime.UtcNow;
@@ -148,12 +266,14 @@ public class PlatformConnectionTests
         private readonly List<SocketHolder> _sockets = new();
         private readonly string? _code;
         private readonly string? _message;
+        private readonly string? _hold;
         private readonly Task _accept;
 
-        private FakePlatform(int port, string? code, string? message)
+        private FakePlatform(int port, string? code, string? message, string? hold)
         {
             _code = code;
             _message = message;
+            _hold = hold;
             Url = $"ws://127.0.0.1:{port}/";
             _listener.Prefixes.Add($"http://127.0.0.1:{port}/");
             _listener.Start();
@@ -175,8 +295,8 @@ public class PlatformConnectionTests
             }
         }
 
-        public static Task<FakePlatform> StartAsync(string? code = null, string? message = null) =>
-            Task.FromResult(new FakePlatform(FreePort(), code, message));
+        public static Task<FakePlatform> StartAsync(string? code = null, string? message = null, string? hold = null) =>
+            Task.FromResult(new FakePlatform(FreePort(), code, message, hold));
 
         public void AbortFirstSocket()
         {
@@ -332,6 +452,11 @@ public class PlatformConnectionTests
         private async Task ReplyAsync(WebSocket socket, JsonElement message)
         {
             var type = message.GetProperty("type").GetString();
+            if (type != null && type == _hold)
+            {
+                return;
+            }
+
             string? json = type switch
             {
                 "hello" when _code != null => JsonSerializer.Serialize(new
