@@ -27,7 +27,7 @@ Unity strips reflected methods unless you preserve them. Keep the player class, 
 
 ## Usage
 
-Set the platform key, then start one agent per character. `TurnAsync` grants that character one chance to act and returns what they did.
+Set the platform key, then start one agent per character. The key belongs to the game. `PlayerId` is that character's id, copied from the Players page. It is a UUID and does not change when the character is renamed. `TurnAsync` grants that character one chance to act and returns what they did.
 
 ```sh
 export WSI_PLATFORM_KEY=pk_...
@@ -39,6 +39,7 @@ The SDK connects to `wss://api.whitesandsint.com`. That address is part of the l
 await using var agents = new AgentServer();
 var ada = await agents.StartAsync(new Villager(world, "Ada"), new StartOptions
 {
+    PlayerId = "3f6c2d1e-8b7a-4c5d-9e0f-1a2b3c4d5e6f",
     Name = "Ada",
     Goal = "Stand on the tree and chop it",
 });
@@ -168,6 +169,7 @@ The default timeout is 60 seconds. Pass a `CancellationToken` to abort the wait.
 | Exception | When |
 | --- | --- |
 | `PlatformAuthException` | The platform rejected the key |
+| `InvalidOperationException` | `PlayerId` is missing or not a character UUID, or this game has no character with that id |
 | `ProtocolVersionException` | This SDK and the platform disagree on the protocol |
 | `TurnFailedException` | The action and the retry both failed. `Attempts` lists both calls |
 | `TurnTimeoutException` | The platform did not finish within the timeout |
@@ -189,11 +191,21 @@ catch (TurnFailedException ex)
 
 ### Several characters
 
-One `AgentServer` hosts every character. Each `StartAsync` is its own session.
+One `AgentServer` hosts every character on the game's platform key. Each `StartAsync` is its own session and names the character with `PlayerId`.
 
 ```csharp
-var ada = await agents.StartAsync(new Villager(world, "Ada"), new StartOptions { Name = "Ada", Goal = "Chop the tree" });
-var bea = await agents.StartAsync(new Villager(world, "Bea"), new StartOptions { Name = "Bea", Goal = "Carry wood home" });
+var ada = await agents.StartAsync(new Villager(world, "Ada"), new StartOptions
+{
+    PlayerId = adaId,
+    Name = "Ada",
+    Goal = "Chop the tree",
+});
+var bea = await agents.StartAsync(new Villager(world, "Bea"), new StartOptions
+{
+    PlayerId = beaId,
+    Name = "Bea",
+    Goal = "Carry wood home",
+});
 
 await ada.TurnAsync();
 await bea.TurnAsync();
@@ -304,7 +316,7 @@ dotnet run --project examples/Forest
 Each example replays a script. Add `-- --remote` to talk to `wss://api.whitesandsint.com`:
 
 ```sh
-PLATFORM_KEY=pk_... dotnet run --project examples/Forest -- --remote
+PLATFORM_KEY=pk_... PLAYER_ID=<ada-uuid> PLAYER_ID_BEA=<bea-uuid> dotnet run --project examples/Forest -- --remote
 ```
 
 Releases are recorded in [CHANGELOG.md](CHANGELOG.md).

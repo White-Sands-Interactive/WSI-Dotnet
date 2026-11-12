@@ -9,6 +9,8 @@ namespace WhiteSands.AgentPlayer.Tests;
 
 public class PlatformConnectionTests
 {
+    private const string Ada = "3f6c2d1e-8b7a-4c5d-9e0f-1a2b3c4d5e6f";
+
     private FakePlatform? _platform;
 
     [Fact]
@@ -22,7 +24,7 @@ public class PlatformConnectionTests
         });
         try
         {
-            var error = await Assert.ThrowsAsync<ProtocolVersionException>(() => outdated.StartAsync(new Pawn()));
+            var error = await Assert.ThrowsAsync<ProtocolVersionException>(() => outdated.StartAsync(new Pawn(), Play()));
             Assert.Equal("upgrade", error.Message);
             Assert.Equal("hello", _platform.Received[0].GetProperty("type").GetString());
             Assert.Equal(ProtocolConstants.ProtocolVersion, _platform.Received[0].GetProperty("protocolVersion").GetInt32());
@@ -41,7 +43,7 @@ public class PlatformConnectionTests
         });
         try
         {
-            var error = await Assert.ThrowsAsync<PlatformAuthException>(() => unauthorized.StartAsync(new Pawn()));
+            var error = await Assert.ThrowsAsync<PlatformAuthException>(() => unauthorized.StartAsync(new Pawn(), Play()));
             Assert.Equal("bad key", error.Message);
         }
         finally
@@ -65,8 +67,9 @@ public class PlatformConnectionTests
         });
         try
         {
-            var agent = await agents.StartAsync(new Pawn(), new StartOptions { Goal = "Step" });
+            var agent = await agents.StartAsync(new Pawn(), new StartOptions { PlayerId = $"  {Ada}  ", Goal = "Step" });
             var started = _platform.Received.Single(envelope => envelope.GetProperty("type").GetString() == "start_session");
+            Assert.Equal(Ada, started.GetProperty("playerId").GetString());
             Assert.Equal("Step", started.GetProperty("goal").GetString());
             Assert.True(started.GetProperty("tools").GetArrayLength() >= 3);
 
@@ -131,7 +134,7 @@ public class PlatformConnectionTests
         });
         try
         {
-            var start = agents.StartAsync(new Pawn());
+            var start = agents.StartAsync(new Pawn(), Play());
             await WaitFor(() => HasType("hello"));
             await Task.Run(() => agents.Interrupt());
             var error = await Assert.ThrowsAsync<InvalidOperationException>(() => start);
@@ -162,7 +165,7 @@ public class PlatformConnectionTests
         });
         try
         {
-            var start = agents.StartAsync(new Pawn());
+            var start = agents.StartAsync(new Pawn(), Play());
             await WaitFor(() => HasType("start_session"));
             await Task.Run(() => agents.Interrupt());
             var error = await Assert.ThrowsAsync<InvalidOperationException>(() => start);
@@ -200,7 +203,7 @@ public class PlatformConnectionTests
         });
         try
         {
-            var agent = await agents.StartAsync(new Pawn());
+            var agent = await agents.StartAsync(new Pawn(), Play());
             var turn = agent.TurnAsync(new TurnOptions { Timeout = TimeSpan.FromSeconds(30) });
             await Task.Run(() => agents.Interrupt());
             await Task.Delay(300);
@@ -223,6 +226,31 @@ public class PlatformConnectionTests
             }
         }
     }
+
+    [Fact]
+    public async Task FailsStartWhenThePlatformRejectsTheCharacter()
+    {
+        _platform = await FakePlatform.StartAsync(startError: "No character with ID 3f6c2d1e-8b7a-4c5d-9e0f-1a2b3c4d5e6f for this game: this game has no characters");
+        var agents = new AgentServer(new AgentServerOptions
+        {
+            PlatformKey = "pk_test",
+            PlatformUrl = _platform.Url,
+        });
+        try
+        {
+            var error = await Assert.ThrowsAsync<InvalidOperationException>(() => agents.StartAsync(new Pawn(), Play()));
+            Assert.Contains("No character with ID", error.Message);
+            Assert.Equal(0, agents.SessionCount);
+        }
+        finally
+        {
+            await agents.CloseAsync();
+            await _platform.DisposeAsync();
+            _platform = null;
+        }
+    }
+
+    private static StartOptions Play() => new() { PlayerId = Ada };
 
     private bool HasType(string type)
     {
@@ -267,13 +295,15 @@ public class PlatformConnectionTests
         private readonly string? _code;
         private readonly string? _message;
         private readonly string? _hold;
+        private readonly string? _startError;
         private readonly Task _accept;
 
-        private FakePlatform(int port, string? code, string? message, string? hold)
+        private FakePlatform(int port, string? code, string? message, string? hold, string? startError)
         {
             _code = code;
             _message = message;
             _hold = hold;
+            _startError = startError;
             Url = $"ws://127.0.0.1:{port}/";
             _listener.Prefixes.Add($"http://127.0.0.1:{port}/");
             _listener.Start();
@@ -295,8 +325,12 @@ public class PlatformConnectionTests
             }
         }
 
-        public static Task<FakePlatform> StartAsync(string? code = null, string? message = null, string? hold = null) =>
-            Task.FromResult(new FakePlatform(FreePort(), code, message, hold));
+        public static Task<FakePlatform> StartAsync(
+            string? code = null,
+            string? message = null,
+            string? hold = null,
+            string? startError = null) =>
+            Task.FromResult(new FakePlatform(FreePort(), code, message, hold, startError));
 
         public void AbortFirstSocket()
         {
@@ -470,6 +504,12 @@ public class PlatformConnectionTests
                     type = "hello_ok",
                     accountName = "fake",
                     protocolVersion = ProtocolConstants.ProtocolVersion,
+                }),
+                "start_session" when _startError != null => JsonSerializer.Serialize(new
+                {
+                    type = "error",
+                    sessionId = message.GetProperty("sessionId").GetString(),
+                    message = _startError,
                 }),
                 "start_session" => JsonSerializer.Serialize(new
                 {

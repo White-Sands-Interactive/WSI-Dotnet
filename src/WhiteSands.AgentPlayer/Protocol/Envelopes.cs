@@ -48,6 +48,9 @@ public sealed class StartSessionEnvelope : Envelope
 
     public string SessionToken { get; set; } = "";
 
+    /// <summary>Character id. One platform key can start every character in that game.</summary>
+    public string PlayerId { get; set; } = "";
+
     public string? Name { get; set; }
 
     public List<ToolDescriptor> Tools { get; set; } = new();

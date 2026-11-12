@@ -2,6 +2,7 @@
 
 ## 1.2.0
 
+- `StartAsync` requires `PlayerId`, the character UUID from the Players page. One platform key starts every character in that game. A missing or non-UUID id is rejected before the socket opens. A character this key cannot play fails `StartAsync` with the platform error.
 - `BindDynamic` registers one tool from a name, description, argument schema, and callback. `see` may replace the reflected view. `wait`, an empty name, a name starting with `_`, and a missing callback are rejected.
 - `Interrupt` closes the platform socket from any thread. Sessions stay registered, and a turn waiting for a result stays waiting. `CloseAsync` still stops sessions.
 

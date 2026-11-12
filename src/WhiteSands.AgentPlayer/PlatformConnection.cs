@@ -159,6 +159,10 @@ internal sealed class PlatformConnection : IAsyncDisposable
 
     public SessionMuxTransport CreateTransport(string sessionId) => new(sessionId, Send);
 
+    /// <summary>Reject a start wait. No-op when nothing is waiting.</summary>
+    public void FailSessionStart(string sessionId, Exception error) =>
+        CompleteWaiter($"session:{sessionId}:start", waiter => waiter.TrySetException(error));
+
     /// <summary>
     /// Abort the current socket from any thread. Does not reconnect, and does not fail turn waiters.
     /// A handshake or <c>session_started</c> waiter returns because the connection closed.

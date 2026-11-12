@@ -13,6 +13,7 @@ var agents = new AgentServer(new AgentServerOptions
 
 var agent = await agents.StartAsync(nia, new StartOptions
 {
+    PlayerId = "3f6c2d1e-8b7a-4c5d-9e0f-1a2b3c4d5e6f",
     Name = "Nia",
     Goal = "Deliver the parcel to the door",
 });

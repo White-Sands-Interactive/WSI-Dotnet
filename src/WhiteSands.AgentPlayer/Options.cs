@@ -52,6 +52,12 @@ public interface IAgentHandle
 
 public sealed class StartOptions
 {
+    /// <summary>
+    /// Character to play. Copy the id from the Players page.
+    /// The platform key belongs to the game; this id selects the character.
+    /// </summary>
+    public string? PlayerId { get; set; }
+
     /// <summary>Label stored with the session. Defaults to the class name.</summary>
     public string? Name { get; set; }
 
@@ -77,6 +83,7 @@ public sealed class StartSessionRequest
     public StartSessionRequest(
         string sessionId,
         string sessionToken,
+        string playerId,
         string? name,
         IReadOnlyList<ToolDescriptor> tools,
         string instructions,
@@ -89,6 +96,7 @@ public sealed class StartSessionRequest
     {
         SessionId = sessionId;
         SessionToken = sessionToken;
+        PlayerId = playerId;
         Name = name;
         Tools = tools;
         Instructions = instructions;
@@ -103,6 +111,8 @@ public sealed class StartSessionRequest
     public string SessionId { get; }
 
     public string SessionToken { get; }
+
+    public string PlayerId { get; }
 
     public string? Name { get; }
 

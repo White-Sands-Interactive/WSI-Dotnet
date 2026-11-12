@@ -6,6 +6,9 @@ namespace WhiteSands.AgentPlayer.Tests;
 
 public class AgentServerTests
 {
+    private const string Ada = "3f6c2d1e-8b7a-4c5d-9e0f-1a2b3c4d5e6f";
+    private const string Bea = "6b1e2a30-0c1d-4e5f-8a9b-0c1d2e3f4a5b";
+
     [Fact]
     public async Task ReturnsTheActionTakenByAScriptedModel()
     {
@@ -16,7 +19,7 @@ public class AgentServerTests
             Inline = TestPlatform.Create(new[] { ToolCallRequest.Call("move", new { dx = 3 }) }),
             OnEvent = events.Add,
         });
-        var agent = await agents.StartAsync(world);
+        var agent = await agents.StartAsync(world, Play(Ada));
         var result = await agent.TurnAsync();
         Assert.Equal("move", result.Action);
         Assert.Equal(3, result.Args.GetProperty("dx").GetInt32());
@@ -39,7 +42,7 @@ public class AgentServerTests
                 ToolCallRequest.Call("chop"),
             }),
         });
-        var agent = await agents.StartAsync(world);
+        var agent = await agents.StartAsync(world, Play(Ada));
         var result = await agent.TurnAsync();
         Assert.Equal(2, result.Attempts);
         Assert.Equal("chop", result.Action);
@@ -59,7 +62,7 @@ public class AgentServerTests
                 ToolCallRequest.Call("bad"),
             }),
         });
-        var agent = await agents.StartAsync(world);
+        var agent = await agents.StartAsync(world, Play(Ada));
         var error = await Assert.ThrowsAsync<TurnFailedException>(() => agent.TurnAsync());
         Assert.Equal("always bad", error.Message);
         Assert.Equal(2, error.Attempts.Count);
@@ -83,8 +86,8 @@ public class AgentServerTests
                 ToolCallRequest.Call("move", new { dx = 5 }),
             }),
         });
-        var agentA = await agents.StartAsync(a);
-        var agentB = await agents.StartAsync(b);
+        var agentA = await agents.StartAsync(a, Play(Ada));
+        var agentB = await agents.StartAsync(b, Play(Bea));
         await agentA.TurnAsync();
         await agentB.TurnAsync();
         Assert.Equal(1, a.X);
@@ -100,7 +103,7 @@ public class AgentServerTests
             Inline = new IdlePlatform(),
             TurnTimeout = TimeSpan.FromMilliseconds(50),
         });
-        var agent = await agents.StartAsync(new TinyWorld());
+        var agent = await agents.StartAsync(new TinyWorld(), Play(Ada));
         await Assert.ThrowsAsync<TurnTimeoutException>(() => agent.TurnAsync());
         await agents.CloseAsync();
     }
@@ -110,17 +113,21 @@ public class AgentServerTests
     {
         string goal = "";
         string instructions = "";
+        string playerId = "";
         var inline = new CapturePlatform(request =>
         {
             goal = request.Goal ?? "";
             instructions = request.Instructions;
+            playerId = request.PlayerId;
         });
         var agents = new AgentServer(new AgentServerOptions { Inline = inline });
         await agents.StartAsync(new TinyWorld(), new StartOptions
         {
+            PlayerId = "  3F6C2D1E-8B7A-4C5D-9E0F-1A2B3C4D5E6F  ",
             Goal = "Collect wood",
             Instructions = "Stay calm.",
         });
+        Assert.Equal("3F6C2D1E-8B7A-4C5D-9E0F-1A2B3C4D5E6F", playerId);
         Assert.Equal("Collect wood", goal);
         Assert.Contains("Stay calm.", instructions);
         Assert.Contains("call wait first", instructions);
@@ -140,7 +147,7 @@ public class AgentServerTests
                 ToolCallRequest.Call("move", new { dx = 2 }),
             }),
         });
-        var agent = await agents.StartAsync(world);
+        var agent = await agents.StartAsync(world, Play(Ada));
         var result = await agent.TurnAsync();
         Assert.Equal(2, result.Attempts);
         Assert.Equal(2, world.X);
@@ -171,7 +178,7 @@ public class AgentServerTests
                 ToolCallRequest.Call("leap", new { dx = 4, extra = true }),
             }),
         });
-        var agent = await agents.StartAsync(world);
+        var agent = await agents.StartAsync(world, Play(Ada));
         var result = await agent.TurnAsync();
         Assert.Equal(2, result.Attempts);
         Assert.Equal("leap", result.Action);
@@ -185,11 +192,27 @@ public class AgentServerTests
     public async Task InterruptOnAnInlineServerLeavesTheSessionInPlace()
     {
         var agents = new AgentServer(new AgentServerOptions { Inline = new IdlePlatform() });
-        await agents.StartAsync(new TinyWorld());
+        await agents.StartAsync(new TinyWorld(), Play(Ada));
         agents.Interrupt();
         Assert.Equal(1, agents.SessionCount);
         await agents.CloseAsync();
         Assert.Equal(0, agents.SessionCount);
+    }
+
+    [Fact]
+    public async Task RejectsAMissingOrNonUuidPlayerIdBeforeStarting()
+    {
+        var agents = new AgentServer(new AgentServerOptions { Inline = new IdlePlatform() });
+        var missing = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => agents.StartAsync(new TinyWorld(), new StartOptions { PlayerId = "  " }));
+        Assert.Contains("playerId is required", missing.Message);
+        var omitted = await Assert.ThrowsAsync<InvalidOperationException>(() => agents.StartAsync(new TinyWorld()));
+        Assert.Contains("playerId is required", omitted.Message);
+        var bad = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => agents.StartAsync(new TinyWorld(), new StartOptions { PlayerId = "ada" }));
+        Assert.Contains("not a character ID", bad.Message);
+        Assert.Equal(0, agents.SessionCount);
+        await agents.CloseAsync();
     }
 
     [Fact]
@@ -227,7 +250,7 @@ public class AgentServerTests
         options.UseSqliteMemory(Path.Combine(directory.FullName, "memory.sqlite"));
         var agents = new AgentServer(options);
         var world = new TinyWorld();
-        var agent = await agents.StartAsync(world, new StartOptions { Name = "Ada" });
+        var agent = await agents.StartAsync(world, new StartOptions { PlayerId = Ada, Name = "Ada" });
         await agent.TurnAsync();
         await agent.TurnAsync();
         Assert.Equal(0, DoneFromPrompt(views[0]).GetArrayLength());
@@ -239,6 +262,8 @@ public class AgentServerTests
         Assert.Equal(5, world.X);
         await agents.CloseAsync();
     }
+
+    private static StartOptions Play(string playerId) => new() { PlayerId = playerId };
 
     private static JsonElement DoneFromPrompt(string prompt)
     {

@@ -19,7 +19,12 @@ var agents = useRemote
         Inline = TestPlatform.Create(solution.Select(passenger => ToolCallRequest.Call("cross", new { passenger })).ToArray()),
     });
 
-var agent = await agents.StartAsync(ferry, new StartOptions { Name = "Ferryman", Goal = Goal });
+var agent = await agents.StartAsync(ferry, new StartOptions
+{
+    PlayerId = useRemote ? Required("PLAYER_ID") : "3f6c2d1e-8b7a-4c5d-9e0f-1a2b3c4d5e6f",
+    Name = "Ferryman",
+    Goal = Goal,
+});
 var limit = useRemote ? 12 : solution.Length;
 for (var turn = 1; turn <= limit && !ferry.Solved; turn++)
 {

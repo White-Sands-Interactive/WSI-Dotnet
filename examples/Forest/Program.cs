@@ -25,8 +25,15 @@ var agents = useRemote
         }),
     });
 
-var adaAgent = await agents.StartAsync(ada, new StartOptions { Goal = "Stand on the tree and chop it" });
-var beaAgent = await agents.StartAsync(bea);
+var adaAgent = await agents.StartAsync(ada, new StartOptions
+{
+    PlayerId = useRemote ? Required("PLAYER_ID") : "3f6c2d1e-8b7a-4c5d-9e0f-1a2b3c4d5e6f",
+    Goal = "Stand on the tree and chop it",
+});
+var beaAgent = await agents.StartAsync(bea, new StartOptions
+{
+    PlayerId = useRemote ? Required("PLAYER_ID_BEA") : "6b1e2a30-0c1d-4e5f-8a9b-0c1d2e3f4a5b",
+});
 
 var moved = await adaAgent.TurnAsync();
 Console.WriteLine($"\nAda {moved.Action}({moved.Args.GetRawText()})");

@@ -108,6 +108,7 @@ public sealed class AgentServer : IAsyncDisposable
     /// </summary>
     public async Task<IAgentHandle> StartAsync(object player, StartOptions? options = null)
     {
+        var playerId = PlayerIds.Require(options?.PlayerId);
         await ConnectAsync().ConfigureAwait(false);
         var reflected = PlayerReflector.Reflect(player, CreateInvoker());
         var sessionId = Guid.NewGuid().ToString();
@@ -136,6 +137,7 @@ public sealed class AgentServer : IAsyncDisposable
             await _inline.StartSessionAsync(new StartSessionRequest(
                 sessionId,
                 sessionToken,
+                playerId,
                 name,
                 reflected.Tools,
                 instructions,
@@ -162,22 +164,39 @@ public sealed class AgentServer : IAsyncDisposable
             var started = _connection.WaitForSessionEventAsync(sessionId, "start");
             try
             {
-                _connection.Send(new StartSessionEnvelope
+                try
                 {
-                    SessionId = sessionId,
-                    SessionToken = sessionToken,
-                    Name = name,
-                    Tools = reflected.Tools.ToList(),
-                    Instructions = instructions,
-                    Goal = options?.Goal,
-                });
-            }
-            catch (Exception) when (started.IsFaulted)
-            {
+                    _connection.Send(new StartSessionEnvelope
+                    {
+                        SessionId = sessionId,
+                        SessionToken = sessionToken,
+                        PlayerId = playerId,
+                        Name = name,
+                        Tools = reflected.Tools.ToList(),
+                        Instructions = instructions,
+                        Goal = options?.Goal,
+                    });
+                }
+                catch (Exception) when (started.IsFaulted)
+                {
+                    await started.ConfigureAwait(false);
+                }
+
                 await started.ConfigureAwait(false);
             }
+            catch (Exception ex) when (!IsClosedDuringStart(ex))
+            {
+                try
+                {
+                    await StopSessionAsync(sessionId).ConfigureAwait(false);
+                }
+                catch (Exception)
+                {
+                    // The start failure is the error the caller needs.
+                }
 
-            await started.ConfigureAwait(false);
+                throw;
+            }
         }
 
         return new Handle(sessionId, this, listeners);
@@ -359,6 +378,11 @@ public sealed class AgentServer : IAsyncDisposable
                 return;
             case ErrorEnvelope error:
                 _logger.LogError(error.Message);
+                if (!string.IsNullOrEmpty(error.SessionId))
+                {
+                    _connection?.FailSessionStart(error.SessionId, new InvalidOperationException(error.Message));
+                }
+
                 return;
             case SessionStartedEnvelope:
             case SessionStoppedEnvelope:
@@ -423,6 +447,9 @@ public sealed class AgentServer : IAsyncDisposable
             // ignore
         }
     }
+
+    private static bool IsClosedDuringStart(Exception error) =>
+        error is InvalidOperationException && error.Message == "platform connection closed";
 
     private string ComposeInstructions(StartOptions? options)
     {
